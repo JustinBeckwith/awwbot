@@ -1,14 +1,13 @@
 import express from 'express';
 import bodyParser from 'body-parser';
-import nconf from 'nconf';
 import {
   InteractionResponseType,
   InteractionType,
   verifyKey,
 } from 'discord-interactions';
-
-nconf.argv().env().file({ file: 'config.json' });
-const publicKey = nconf.get('publicKey');
+import { AWW_COMMAND, INVITE_COMMAND } from './commands.js';
+import * as config from './config.js';
+import { getCuteUrl } from './reddit.js';
 
 const app = express();
 app.use(
@@ -26,7 +25,7 @@ app.use((request, response, next) => {
       request.rawBody,
       signature,
       timestamp,
-      publicKey
+      config.publicKey
     );
     if (!isValidRequest) {
       console.error('Invalid Request');
@@ -41,7 +40,7 @@ app.get('/', (req, res) => {
   res.send('👋');
 });
 
-app.post('/', (request, response) => {
+app.post('/', async (request, response) => {
   const message = request.body;
   console.log(message);
   if (message.type === InteractionType.PING) {
@@ -49,6 +48,35 @@ app.post('/', (request, response) => {
     response.json({
       type: InteractionResponseType.PONG,
     });
+  } else if (message.type === InteractionType.APPLICATION_COMMAND) {
+    switch (message.data.name.toLowerCase()) {
+      case AWW_COMMAND.name.toLowerCase(): {
+        const cuteUrl = await getCuteUrl();
+        response.status(200).send({
+          type: 4,
+          data: {
+            content: cuteUrl,
+          },
+        });
+        break;
+      }
+      case INVITE_COMMAND.name.toLowerCase(): {
+        const applicationId = config.applicationId;
+        const INVITE_URL = `https://discord.com/oauth2/authorize?client_id=${applicationId}&scope=applications.commands`;
+        response.status(200).send({
+          type: 4,
+          data: {
+            content: INVITE_URL,
+            flags: 64,
+          },
+        });
+        break;
+      }
+      default:
+        console.error('Unknown Command');
+        response.status(400).send({ error: 'Unknown Type' });
+        break;
+    }
   } else {
     console.error('Unknown Type');
     response.status(400).send({ error: 'Unknown Type' });
